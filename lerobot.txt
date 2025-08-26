@@ -1,0 +1,210 @@
+sudo chmod 666 /dev/ttyACM1
+sudo chmod 666 /dev/ttyACM0
+
+
+#校准
+python -m lerobot.calibrate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/ttyACM1 \
+    --robot.id=my_awesome_follower_arm
+    
+python -m lerobot.calibrate \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/ttyACM0 \
+    --teleop.id=my_awesome_leader_arm
+    
+    
+#控制
+python -m lerobot.teleoperate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/ttyACM1 \
+    --robot.id=my_awesome_follower_arm \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/ttyACM0 \
+    --teleop.id=my_awesome_leader_arm
+       
+#找port
+python -m lerobot.find_port
+
+######！！！！添加参数跳过follower夹爪,目前只在so101_follower添加，HIL-SERL部分在so100作了修改
+--robot.skip_motors='["gripper"]' \
+
+follower ACM1
+leader ACM0
+
+# find cam
+python -m lerobot.find_cameras opencv
+
+双目：4,6  臂腕：0
+双目：2,4  臂腕：6
+lastest version:全景：2，4 side：8，10
+
+# 相机 watch
+python -m lerobot.teleoperate \
+  --robot.type=so101_follower \
+  --robot.port=/dev/ttyACM1 \
+  --robot.id=my_awesome_follower_arm \
+  --robot.cameras='{wrist: {type: opencv, index_or_path: /dev/video10, width: 424, height: 240, fps: 15}, front: {type: opencv, index_or_path: /dev/video4, width: 424, height: 240, fps: 15}}' \
+  --teleop.type=so101_leader \
+  --teleop.port=/dev/ttyACM0 \
+  --teleop.id=my_awesome_leader_arm \
+  --display_data=true
+  
+  
+   --robot.skip_motors='["gripper"]' \
+
+python -m lerobot.teleoperate \
+  --robot.type=so101_follower \
+  --robot.port=/dev/ttyACM0 \
+  --robot.id=my_awesome_follower_arm \
+  --robot.cameras='{hand: {type: opencv, index_or_path: /dev/video6, width: 640, height: 480, fps: 30}, front: {type: opencv, index_or_path: /dev/video4, width: 640, height: 480, fps: 30}}' \
+  --teleop.type=so101_leader \
+  --teleop.port=/dev/ttyACM1 \
+  --teleop.id=my_awesome_leader_arm \
+  --robot.skip_motors='["gripper"]' \
+  --display_data=true
+
+
+############################################################################################
+# 废弃暂时=======相机 record 自己写测
+python -m lerobot.record \
+  --robot.type=so101_follower \
+  --robot.port=/dev/ttyACM1 \
+  --robot.id=my_awesome_follower_arm \
+  --robot.cameras='{hand: {type: opencv, index_or_path: /dev/video14, width: 640, height: 480, fps: 30}, front: {type: opencv, index_or_path: /dev/video20, width: 640, height: 480, fps: 30}}' \
+  --teleop.type=so101_leader \
+  --teleop.port=/dev/ttyACM0 \
+  --teleop.id=my_awesome_leader_arm \
+  --output_dir=/home/luka/lerobot_datasets/so101_multi_cam \
+  --display_data=true
+
+
+#Save /home/luka/lerobot_datasets/so101_multi_cam
+camera_front/left/right：三路视频帧
+
+joint_positions.npy：机械臂关节角度
+
+actions.npy：leader 的遥操作输入
+
+timestamps.npy：所有帧时间戳
+
+config.yaml：保存运行配置
+#############################################################################################
+
+# 官方相机 record
+python -m lerobot.record \
+    --robot.type=so101_follower \
+    --robot.port=/dev/ttyACM0 \
+    --robot.id=my_awesome_follower_arm \
+    --robot.cameras='{hand: {type: opencv, index_or_path: /dev/video14, width: 640, height: 480, fps: 30}, front: {type: opencv, index_or_path: /dev/video20, width: 640, height: 480, fps: 30}}' \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/ttyACM1 \
+    --teleop.id=my_awesome_leader_arm \
+    --display_data=true \
+    --dataset.repo_id=xuanyuanj/so101_v2 \
+    --dataset.num_episodes=36 \
+    --dataset.single_task="touch" \
+    --dataset.push_to_hub=False \
+    --dataset.reset_time_s=10
+    
+   
+# 重播
+
+
+
+# 训练
+python src/lerobot/scripts/train.py \
+  --dataset.repo_id=xuanyuanj/so101_v3 \
+  --dataset.root=/home/luka/.cache/huggingface/lerobot/xuanyuanj/so101_v3 \
+  --policy.type=act \
+  --policy.repo_id=local/act_so101_v3 \
+  --policy.push_to_hub=false \
+  --output_dir=outputs/train/act_so101_v3 \
+  --job_name=act_so101_v3 \
+  --policy.device=cuda \
+  --wandb.enable=false
+
+python src/lerobot/scripts/train.py \
+  --policy.path=lerobot/smolvla_base \
+  --policy.repo_id=local/act_so101_v3 \
+  --dataset.root=/home/luka/.cache/huggingface/lerobot/xuanyuanj/so101_v3 \
+  --dataset.repo_id=xuanyuanj/so101_v3 \
+  --batch_size=64 \
+  --steps=20000 \
+  --output_dir=outputs/train/my_smolvla \
+  --job_name=my_smolvla_training \
+  --policy.device=cuda \
+  --wandb.enable=false \
+  --policy.push_to_hub=false
+
+
+# 策略评估
+python -m lerobot.record \
+  --robot.type=so101_follower \
+  --robot.port=/dev/ttyACM1 \
+  --robot.id=my_awesome_follower_arm \
+  --robot.cameras='{wrist: {type: opencv, index_or_path: /dev/video0, width: 160, height: 120, fps: 15}, front: {type: opencv, index_or_path: /dev/video6, width: 424, height: 240, fps: 15}}' \
+  --display_data=false \
+  --dataset.repo_id=xuanyuanj/eval_nora_so101 \
+  --dataset.num_episodes=0 \
+  --dataset.episode_time_s=5 \
+  --dataset.reset_time_s=10 \
+  --dataset.single_task="touch" \
+  --dataset.push_to_hub=false \
+  --policy.type=nora \
+  --policy.path=outputs/train/act_so101_v3/checkpoints/last/pretrained_model
+
+==================================================================================
+HIL-SERL==========================================================================
+
+--robot.cameras='{wrist: {type: opencv, index_or_path: /dev/video0, width: 160, height: 120, fps: 15}, front: {type: opencv, index_or_path: /dev/video6, width: 320, height: 180, fps: 15}}' \
+
+# 找安全动作边界
+python -m lerobot.scripts.find_joint_limits \
+    --robot.type=so101_follower \
+    --robot.port=/dev/ttyACM1 \
+    --robot.id=my_awesome_follower_arm \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/ttyACM0 \
+    --teleop.id=my_awesome_leader_arm 
+
+
+# 录制，s成功，esc失败，空格接管/再按交还
+python -m lerobot.scripts.rl.gym_manipulator --config_path /home/xuanyuanj/lerobot/HIL-SERL/env_config_so101.json
+
+# 确定裁减参数
+python -m lerobot.scripts.rl.crop_dataset_roi --repo-id xuanyuanj/so101_touch_block
+python -m lerobot.scripts.rl.crop_dataset_roi --repo-id local --root /home/xuanyuanj/lerobot/datasets_0819/so101_touch_block/
+
+# 为奖励分类器收集数据集
+python -m lerobot.scripts.rl.gym_manipulator --config_path /home/xuanyuanj/lerobot/HIL-SERL/reward_classifier_train_config.json
+
+lerobot-train --config_path /home/xuanyuanj/lerobot/HIL-SERL/reward_classifier_train_config.json
+
+
+#人机交互学习
+#####改动
+gym_manipulator.py
+1276,1278 RL
+1279 data
+
+temperature_init: last train配置文件里
+#####
+
+
+#学习者
+python -m lerobot.scripts.rl.learner --config_path=/home/xuanyuanj/lerobot/HIL-SERL/train_config_hilserl_so101.json
+
+#actor
+python -m lerobot.scripts.rl.actor --config_path=/home/xuanyuanj/lerobot/HIL-SERL/train_config_hilserl_so101_1.json
+
+
+
+"dataset": {
+    //     "repo_id": "xuanyuanj/so101_touch_block",
+    //     "use_imagenet_stats": false,
+    //     "": "/home/xuanyuanj/lerobot/datasets_0819/so101_touch_block"
+    // },
+
+
+
